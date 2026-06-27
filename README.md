@@ -93,6 +93,22 @@ Adımlar:
 `IASHCMLEAVES`, `IASHCMPER`, `IASADRBOOKCONTACT`, `IASADRBKCNTORG`,
 `IASHCM302V`, `IASHCM321`.
 
+### Sorgulama sırasında kullanılan proje dosyaları
+Sorgu bir personel numarası ile geldiğinde uygulama şu dosyaları kullanır:
+
+- `app/main.py`: HTTP isteğini alır, servisi çağırır ve API yanıtını döner.
+- `app/services/leave_balance.py`: personel doğrulaması yapar ve izin hesabını başlatır.
+- `app/providers.py`: SQL sorgularını çalıştırır, personel bilgisi ve izin kayıtlarını veritabanından çeker.
+- `app/canias_leave.py`: CANIAS `SETREMLVDAYS` mantığını Python içinde hesaplar.
+- `app/db.py`: pyodbc bağlantısını açar ve kapatır.
+- `app/config.py`: veritabanı, schema ve CANIAS sabitlerini `.env` üzerinden okur.
+- `app/models.py`: sorgudan dönen verileri uygulama modellerine çevirir.
+- `app/schemas.py`: API yanıtının dışarıya hangi alanlarla döneceğini tanımlar.
+
+Kısacası akış şöyledir: `app/main.py` isteği alır, `app/services/leave_balance.py`
+işi başlatır, `app/providers.py` veriyi toplar, `app/canias_leave.py`
+hesaplamayı yapar ve sonuç API olarak geri döner.
+
 ---
 
 ## 3. Kurulum
