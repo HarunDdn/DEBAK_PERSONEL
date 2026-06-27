@@ -106,17 +106,22 @@ cp .env.example .env   # CANIAS_DB_PASSWORD degerini doldurun
 **Veritabanı bağlantısı** (ADO.NET karşılığı):
 
 ```
-Data Source=DEBAKNETSIS\DB20;Initial Catalog=DBKBGYS;User ID=sa;Password=***
+Data Source=DEBAKNETSIS\DB20;Initial Catalog=DEBAK803;User ID=sa;Password=***
 ```
 
 `.env` dosyasında karşılığı:
 
 ```
 CANIAS_DB_SERVER=DEBAKNETSIS\DB20
-CANIAS_DB_NAME=DBKBGYS
+CANIAS_DB_NAME=DEBAK803
+CANIAS_DB_SCHEMA=
 CANIAS_DB_USER=sa
 CANIAS_DB_PASSWORD=<sifreniz>
 ```
+
+`CANIAS_DB_SCHEMA` opsiyoneldir. Doluysa sorgular bu schema ile
+çalıştırılır (ör. `dbo`). Boş bırakılırsa servis SQL Server üzerinde tablo
+adından schema'yı otomatik çözer.
 
 **GR01 (Yıllık İzin) kıdem dilimleri** (kurum onaylı, `IASHCM213D`):
 
@@ -148,20 +153,23 @@ python scripts/smoke_test.py 1028
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 # veya
 python run.py
+
+# 8000 doluysa farkli port
+$env:APP_PORT=8015; python run.py
 ```
 
-Tarayıcı arayüzü: `http://localhost:8000/`
+Tarayıcı arayüzü: `http://localhost:8015/`
 
 İstek (web arayüzü ile aynı API):
 
 ```bash
-curl http://localhost:8000/api/leave-balance/1028
+curl http://localhost:8015/api/leave-balance/1028
 ```
 
 Detaylı API (trace alan adlarıyla):
 
 ```bash
-curl http://localhost:8000/personnel/1028/remaining-leaves
+curl http://localhost:8015/personnel/1028/remaining-leaves
 ```
 
 Örnek yanıt:
@@ -227,4 +235,16 @@ tests/               # trace tabanlı birim testler
 - Trace yalnızca tek bir personelin/konfigürasyonun yolunu gösterdiğinden,
   `GETIHBDAY` (rapor günü) ve yaş bazlı asgari gibi nadir dallar yürürlükteki
   4857 sayılı İş Kanunu'na göre uygulanmıştır.
-```
+
+---
+
+## 8. Son Güncellemeler (2026-06-27)
+
+- **42S02 / Invalid object name** hatası için SQL sorguları schema-duyarlı hale
+   getirildi. Servis tabloları `sys.tables` + `sys.schemas` üzerinden çözer.
+   İstenirse `CANIAS_DB_SCHEMA` ile schema sabitlenebilir.
+- ODBC'den dönen tarih alanlarında tip farkı nedeniyle oluşan karşılaştırma
+   hataları giderildi. `datetime` ve string tarih değerleri uygulama içinde
+   `date` tipine normalize edilir.
+- API, canlı doğrulamada `GET /api/leave-balance/1028` çağrısına başarılı
+   yanıt döndürmektedir.
