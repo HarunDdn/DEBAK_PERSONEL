@@ -1,6 +1,7 @@
 """API istek/yanit semalari (Pydantic)."""
 from __future__ import annotations
 
+from datetime import date
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -28,6 +29,32 @@ class RemainingLeaveResponse(BaseModel):
     company: Optional[str] = None
     as_of: str = Field(..., description="Hesaplama tarihi (PLVDATE)")
     items: List[RemainingLeaveItem]
+
+
+class LeaveBalanceItem(BaseModel):
+    """`/api/leave-balance/{persid}` yanit satiri (main dal uyumlulugu)."""
+
+    rem_field: str = Field(description="REM1, REM2, REM3 veya REM4")
+    leave_code: str
+    leave_name: str
+    leave_group: str
+    remaining_days: float
+    total_earned: float
+    used_days: float
+    leave_days: float
+    seniority_date: date | None = None
+    seniority_years: int = 0
+
+
+class LeaveBalanceResponse(BaseModel):
+    """Web arayuzu ve `/api/leave-balance` yaniti."""
+
+    persid: str
+    display_name: str | None = None
+    company: str | None = None
+    plant: str | None = None
+    query_date: date
+    balances: list[LeaveBalanceItem]
 
 
 class ErrorResponse(BaseModel):

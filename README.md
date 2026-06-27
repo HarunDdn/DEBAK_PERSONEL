@@ -146,9 +146,19 @@ python scripts/smoke_test.py 1028
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# veya
+python run.py
 ```
 
-İstek:
+Tarayıcı arayüzü: `http://localhost:8000/`
+
+İstek (web arayüzü ile aynı API):
+
+```bash
+curl http://localhost:8000/api/leave-balance/1028
+```
+
+Detaylı API (trace alan adlarıyla):
 
 ```bash
 curl http://localhost:8000/personnel/1028/remaining-leaves
