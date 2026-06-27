@@ -1,0 +1,126 @@
+"""HCMT101D001.GETREMAININGDAYS log dosyasından çıkarılan SQL sorguları."""
+
+# Personel izin grupları — HCMT101D001.GETREMAININGDAYS satır 28
+LEAVE_GROUPS_QUERY = """
+SELECT
+    lg.CLIENT,
+    lg.PERSID,
+    lg.LEAVECODE,
+    lg.LEAVEGRP,
+    lg.LEAVESENDATE,
+    lg.USEDDAY,
+    lg.EXTRAYEAR,
+    h306.LEAVECODE AS LEAVECODE_MASTER,
+    h306x.STEXT
+FROM IASHCMLVGRP lg
+LEFT JOIN IASHCM306 h306
+    ON lg.CLIENT = h306.CLIENT
+    AND lg.LEAVECODE = h306.LEAVECODE
+LEFT JOIN IASHCM306X h306x
+    ON h306.CLIENT = h306x.CLIENT
+    AND h306.COMPANY = h306x.COMPANY
+    AND h306.LEAVECODE = h306x.LEAVECODE
+WHERE lg.CLIENT = :client
+    AND lg.PERSID = :persid
+    AND h306.COMPANY = :company
+    AND h306x.LANGU = :language
+ORDER BY h306.LEAVECODE
+"""
+
+# Personel temel bilgileri — izin hesabı için gerekli bağlam
+PERSONNEL_CONTEXT_QUERY = """
+SELECT
+    p.PERSID,
+    p.CLIENT,
+    p.CONTACTNUM,
+    p.DISPLAY,
+    rec.COMPANY,
+    rec.PLANT,
+    org.DEPARTMENT,
+    org.WORKTITLE,
+    c.BIRTHDAY
+FROM IASHCMPER p
+INNER JOIN IASADRBKCNTREC rec
+    ON rec.CLIENT = p.CLIENT
+    AND rec.CONTACTNUM = p.CONTACTNUM
+INNER JOIN IASADRBKCNTORG org
+    ON org.CLIENT = p.CLIENT
+    AND org.CONTACTNUM = p.CONTACTNUM
+INNER JOIN IASADRBOOKCONTACT c
+    ON c.CLIENT = p.CLIENT
+    AND c.CONTACTNUM = p.CONTACTNUM
+    AND c.CTYPE = 1
+WHERE p.CLIENT = :client
+    AND p.PERSID = :persid
+"""
+
+# Kullanılan izin günleri — HCMLEAVEREC.GETLEAVEDAYS satır 29
+USED_LEAVE_DAYS_QUERY = """
+SELECT COALESCE(SUM(lv.TOTLEAVEDAY), 0) AS LVDAYS
+FROM IASHCMLEAVES lv
+WHERE lv.CLIENT = :client
+    AND lv.PERSID = :persid
+    AND lv.LEAVECODE = :leavecode
+    AND lv.FIRSTDATE <= :control_date
+    AND (
+        lv.LASTDATE > :seniority_date
+        OR (lv.FIRSTDATE = :seniority_date AND lv.LASTDATE = :seniority_date)
+    )
+    AND lv.CONFIRMSTAT <= 1
+    AND lv.LVSTAT <= 1
+"""
+
+# İzin grubu tanımı — HCM213REC.FETCH (kıdem/yıllık izin kuralları)
+LEAVE_GROUP_DEFINITION_QUERY = """
+SELECT
+    h213.LVGROUPID,
+    h213.LVCALCTYPE,
+    h213.LVTYPE,
+    h213x.STEXT AS GROUP_NAME
+FROM IASHCM213 h213
+LEFT JOIN IASHCM213X h213x
+    ON h213x.CLIENT = h213.CLIENT
+    AND h213x.COMPANY = h213.COMPANY
+    AND h213x.LVGROUPID = h213.LVGROUPID
+    AND h213x.LANGU = :language
+WHERE h213.CLIENT = :client
+    AND h213.COMPANY = :company
+    AND h213.LVGROUPID = :leave_group
+"""
+
+# Sabit yıllık izin günü — IASHCM213D (GETCONSTYEARLV)
+CONSTANT_LEAVE_DAYS_QUERY = """
+SELECT h213d.LVDAYS
+FROM IASHCM213D h213d
+WHERE h213d.CLIENT = :client
+    AND h213d.COMPANY = :company
+    AND h213d.LVGROUPID = :leave_group
+ORDER BY h213d.ORDNUM
+"""
+
+# Kıdeme göre yıllık izin — IASHCM213V (GETEARNEDLVDAYS / yıllık izin)
+SENIORITY_LEAVE_DAYS_QUERY = """
+SELECT h213v.LVDAYS, h213v.VALIDFROM, h213v.ORDNUM
+FROM IASHCM213V h213v
+WHERE h213v.CLIENT = :client
+    AND h213v.COMPANY = :company
+    AND h213v.LVGROUPID = :leave_group
+ORDER BY h213v.ORDNUM, h213v.VALIDFROM
+"""
+
+# Kıdem dışı bırakılan izin günleri — CALCEXCLUDEDSEN (EXCLUDEDSEN=1)
+EXCLUDED_SENIORITY_DAYS_QUERY = """
+SELECT COALESCE(SUM(lv.TOTLEAVEDAY), 0) AS EXCLUDED_DAYS
+FROM IASHCMLEAVES lv
+INNER JOIN IASHCM306 h306
+    ON h306.CLIENT = lv.CLIENT
+    AND h306.COMPANY = lv.COMPANY
+    AND h306.LEAVECODE = lv.LEAVECODE
+    AND h306.EXCLUDEDSEN = 1
+WHERE lv.CLIENT = :client
+    AND lv.PERSID = :persid
+    AND lv.FIRSTDATE <= :control_date
+    AND lv.LASTDATE >= :seniority_date
+    AND lv.CONFIRMSTAT <= 1
+    AND lv.LVSTAT <= 1
+"""
