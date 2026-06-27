@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CANIAS İzin Bakiyesi</title>
+    <style>
+        :root {
+            --bg: #f4f6f9;
+            --card: #ffffff;
+            --primary: #1a56db;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --success: #059669;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        .container { max-width: 720px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+        .subtitle { color: var(--muted); margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 1rem;
+        }
+        .search-row { display: flex; gap: 0.75rem; }
+        input[type="text"] {
+            flex: 1;
+            padding: 0.65rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.65rem 1.25rem;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .person-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .person-info span { color: var(--muted); display: block; font-size: 0.8rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
+        .days { font-weight: 600; color: var(--success); font-size: 1.1rem; }
+        .error { color: #dc2626; padding: 0.75rem; background: #fef2f2; border-radius: 8px; }
+        .hidden { display: none; }
+        .loading { color: var(--muted); text-align: center; padding: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Personel İzin Bakiyesi</h1>
+        <p class="subtitle">CANIAS ERP — IASHCMLVGRP (REM1–REM4)</p>
+
+        <div class="card">
+            <div class="search-row">
+                <input type="text" id="persid" placeholder="Personel numarası (örn: 1028)" autofocus>
+                <button id="searchBtn" onclick="fetchBalance()">Sorgula</button>
+            </div>
+        </div>
+
+        <div id="loading" class="card loading hidden">Sorgulanıyor...</div>
+        <div id="error" class="card error hidden"></div>
+
+        <div id="results" class="hidden">
+            <div class="card">
+                <div class="person-info" id="personInfo"></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Alan</th>
+                            <th>İzin Türü</th>
+                            <th>Kod</th>
+                            <th>Kalan Gün</th>
+                        </tr>
+                    </thead>
+                    <tbody id="balanceTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById("persid").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") fetchBalance();
+        });
+
+        async function fetchBalance() {
+            const persid = document.getElementById("persid").value.trim();
+            if (!persid) return;
+
+            const loading = document.getElementById("loading");
+            const error = document.getElementById("error");
+            const results = document.getElementById("results");
+            const btn = document.getElementById("searchBtn");
+
+            loading.classList.remove("hidden");
+            error.classList.add("hidden");
+            results.classList.add("hidden");
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/leave-balance/${encodeURIComponent(persid)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Sorgu başarısız");
+
+                document.getElementById("personInfo").innerHTML = `
+                    <div><span>Personel No</span>${data.persid}</div>
+                    <div><span>Ad Soyad</span>${data.display_name || "-"}</div>
+                    <div><span>Şirket</span>${data.company || "-"}</div>
+                    <div><span>Tesis</span>${data.plant || "-"}</div>
+                    <div><span>Sorgu Tarihi</span>${data.query_date}</div>
+                `;
+
+                const tbody = document.getElementById("balanceTable");
+                tbody.innerHTML = data.balances.map(b => `
+                    <tr>
+                        <td><strong>${b.rem_field}</strong></td>
+                        <td>${b.leave_name}</td>
+                        <td>${b.leave_code}</td>
+                        <td class="days">${b.remaining_days}</td>
+                    </tr>
+                `).join("");
+
+                results.classList.remove("hidden");
+            } catch (err) {
+                error.textContent = err.message;
+                error.classList.remove("hidden");
+            } finally {
+                loading.classList.add("hidden");
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
