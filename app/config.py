@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Iterable
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,9 +17,9 @@ class Settings(BaseSettings):
     # --- Veritabani baglantisi (pyodbc) ---
     canias_db_driver: str = "ODBC Driver 18 for SQL Server"
     canias_db_server: str = r"DEBAKNETSIS\DB20"
-    canias_db_name: str = "DBKBGYS"
+    canias_db_name: str = "DEBAK803"
     canias_db_user: str = "sa"
-    canias_db_password: str = ""
+    canias_db_password: str = "mtr+-60891011"
     canias_db_trust_cert: str = "yes"
     canias_db_encrypt: str = "no"
 
@@ -43,10 +44,39 @@ class Settings(BaseSettings):
     def canias_language(self) -> str:
         return self.canias_langu
 
+    def _available_odbc_drivers(self) -> list[str]:
+        """Sistemde kurulu ODBC suruculerini dondurur."""
+        import pyodbc
+
+        return list(pyodbc.drivers())
+
+    def _select_odbc_driver(self, candidates: Iterable[str]) -> str:
+        """Kurulu ise ilk uygun SQL Server surucusunu sec.
+
+        Bu, .env icindeki varsayilan surucu kurulu degilse IM002 hatasini
+        engeller ve ortamda mevcut olan en yakin uyumlu surucuyu kullanir.
+        """
+        available = self._available_odbc_drivers()
+        for driver in candidates:
+            if driver and driver in available:
+                return driver
+        if self.canias_db_driver in available:
+            return self.canias_db_driver
+        return self.canias_db_driver
+
     def odbc_connection_string(self) -> str:
         """pyodbc icin ODBC baglanti dizesini olusturur."""
+        driver = self._select_odbc_driver(
+            (
+                self.canias_db_driver,
+                "ODBC Driver 18 for SQL Server",
+                "ODBC Driver 17 for SQL Server",
+                "SQL Server Native Client 11.0",
+                "SQL Server",
+            )
+        )
         return (
-            f"DRIVER={{{self.canias_db_driver}}};"
+            f"DRIVER={{{driver}}};"
             f"SERVER={self.canias_db_server};"
             f"DATABASE={self.canias_db_name};"
             f"UID={self.canias_db_user};"

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CANIAS izin bakiyesi API sunucusunu başlatır."""
 
+
 import uvicorn
 
 from app.config import get_settings
