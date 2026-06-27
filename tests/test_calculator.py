@@ -9,8 +9,8 @@ Beklenen sonuc (trace HCMT101D001.GETREMAININGDAYS):
 from datetime import date
 
 from app.canias_leave import LeaveCalculator
+from app.constants import GR01_ANNUAL_LEAVE_BRACKETS
 from app.models import (
-    HCM213Bracket,
     HCM213Settings,
     LeaveGroupRow,
     LeaveRecord,
@@ -53,11 +53,7 @@ def _build_provider() -> FakeProvider:
         "GR01": HCM213Settings(
             lvgroupid="GR01", lvgrptype=1, daytransfer=True, isdatebased=False,
             lvdays=0.0,
-            brackets=[
-                HCM213Bracket(ordnum=1, firstyear=1, lastyear=5, lvdays=14.0),
-                HCM213Bracket(ordnum=2, firstyear=6, lastyear=14, lvdays=20.0),
-                HCM213Bracket(ordnum=3, firstyear=15, lastyear=99, lvdays=26.0),
-            ],
+            brackets=list(GR01_ANNUAL_LEAVE_BRACKETS),
         ),
     }
 

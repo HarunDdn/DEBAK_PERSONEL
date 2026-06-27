@@ -100,14 +100,45 @@ Adımlar:
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # değerleri kendi ortamınıza göre doldurun
+cp .env.example .env   # CANIAS_DB_PASSWORD degerini doldurun
 ```
+
+**Veritabanı bağlantısı** (ADO.NET karşılığı):
+
+```
+Data Source=DEBAKNETSIS\DB20;Initial Catalog=DBKBGYS;User ID=sa;Password=***
+```
+
+`.env` dosyasında karşılığı:
+
+```
+CANIAS_DB_SERVER=DEBAKNETSIS\DB20
+CANIAS_DB_NAME=DBKBGYS
+CANIAS_DB_USER=sa
+CANIAS_DB_PASSWORD=<sifreniz>
+```
+
+**GR01 (Yıllık İzin) kıdem dilimleri** (kurum onaylı, `IASHCM213D`):
+
+| Kıdem yılı | İzin günü |
+|------------|-----------|
+| 1–5        | 14        |
+| 6–14       | 20        |
+| 15+        | 26        |
+
+Bu dilimler çalışma anında veritabanından okunur; `app/constants.py` içinde test referansı olarak tutulur.
 
 > **ODBC sürücüsü:** MSSQL bağlantısı için sistemde *Microsoft ODBC Driver
 > for SQL Server* kurulu olmalıdır (`.env` içindeki `CANIAS_DB_DRIVER`).
 
-`.env` içindeki sabitler trace'in `LOGIN INFORMATION` bölümünden gelir:
+`.env` içindeki CANIAS sabitleri trace'in `LOGIN INFORMATION` bölümünden gelir:
 `CLIENT=00`, `LANGU=T`, `COMPANY=01`, `PLANT=01`.
+
+Bağlantı ve GR01 doğrulama:
+
+```bash
+python scripts/smoke_test.py 1028
+```
 
 ---
 

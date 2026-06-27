@@ -13,8 +13,9 @@ class Settings(BaseSettings):
 
     # --- Veritabani baglantisi ---
     canias_db_driver: str = "ODBC Driver 18 for SQL Server"
-    canias_db_server: str = "CANIAS"
-    canias_db_name: str = "DEBAK"
+    canias_db_server: str = r"DEBAKNETSIS\DB20"
+    canias_db_name: str = "DBKBGYS"
+    canias_db_user: str = "sa"
     canias_db_user: str = ""
     canias_db_password: str = ""
     canias_db_trust_cert: str = "yes"
