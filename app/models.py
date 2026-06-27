@@ -1,35 +1,101 @@
-from datetime import date, datetime
-from decimal import Decimal
+"""CANIAS HCM izin hesaplamasinda kullanilan alan (domain) modelleri.
 
-from pydantic import BaseModel, Field
+Tum alan/tablo isimleri CANIAS trace dosyasindaki (HCMT101) gercek
+isimlerle birebir eslesir.
+"""
+from __future__ import annotations
 
-
-class LeaveBalanceItem(BaseModel):
-    rem_field: str = Field(description="REM1, REM2, REM3 veya REM4")
-    leave_code: str
-    leave_name: str
-    leave_group: str
-    remaining_days: float
-    total_earned: float
-    used_days: float
-    leave_days: float
-    seniority_date: date | None = None
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Optional
 
 
-class LeaveBalanceResponse(BaseModel):
+@dataclass
+class PersonnelMaster:
+    """IASHCMPER + IASADRBOOKCONTACT + IASADRBKCNTORG birlesimi."""
+
     persid: str
-    display_name: str | None = None
-    company: str | None = None
-    plant: str | None = None
-    query_date: date
-    balances: list[LeaveBalanceItem]
+    contactnum: str
+    company: str
+    plant: str
+    birthday: Optional[date]
+    display: str = ""
 
 
-class ErrorResponse(BaseModel):
-    detail: str
+@dataclass
+class LeaveGroupRow:
+    """IASHCMLVGRP satiri (personelin bir izin grubu kaydi)."""
+
+    leavecode: str
+    leavegrp: str
+    leavesendate: date
+    usedday: float
+    extrayear: int
+    stext: str
+
+    senyear: int = 0
+    totearned: float = 0.0
+    lvdays: float = 0.0
+    remlvdays: float = 0.0
+    excsenday: float = 0.0
 
 
-def to_float(value: Decimal | float | int | None) -> float:
-    if value is None:
-        return 0.0
-    return float(value)
+@dataclass
+class HCM213Bracket:
+    """IASHCM213D detay satiri."""
+
+    ordnum: int
+    firstyear: int
+    lastyear: int
+    lvdays: float
+
+
+@dataclass
+class HCM213Settings:
+    """IASHCM213 izin grubu basligi + IASHCM213D detaylari."""
+
+    lvgroupid: str
+    lvgrptype: int
+    daytransfer: bool
+    isdatebased: bool
+    lvdays: float
+    monthdays: float = 0.0
+    firstlvmonth: int = 0
+    stext: str = ""
+    brackets: list[HCM213Bracket] = field(default_factory=list)
+
+
+@dataclass
+class LeaveRecord:
+    """IASHCMLEAVES satiri."""
+
+    firstdate: date
+    lastdate: date
+    totleaveday: float
+    excludedsen: int = 0
+
+
+@dataclass
+class IHBDayBracket:
+    """IASHCM321 satiri."""
+
+    code: str
+    firstmonth: int
+    lastmonth: int
+    baseday: int
+    unionday: int = 0
+
+
+@dataclass
+class RemainingLeave:
+    """Hesaplama cikti satiri."""
+
+    index: int
+    leavecode: str
+    leavegrp: str
+    name: str
+    remaining_days: float
+    earned_days: float
+    used_in_period: float
+    carried_used: float
+    seniority_years: int

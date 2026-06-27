@@ -1,37 +1,58 @@
+"""Ortam degiskenlerinden uygulama ayarlarini yukler."""
+from __future__ import annotations
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    """`.env` dosyasindan / ortam degiskenlerinden okunan ayarlar."""
 
-    db_driver: str = "mssql"
-    db_host: str = "localhost"
-    db_port: int = 1433
-    db_name: str = "CANIAS"
-    db_user: str = ""
-    db_password: str = ""
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
+    # --- Veritabani baglantisi (pyodbc) ---
+    canias_db_driver: str = "ODBC Driver 18 for SQL Server"
+    canias_db_server: str = r"DEBAKNETSIS\DB20"
+    canias_db_name: str = "DBKBGYS"
+    canias_db_user: str = "sa"
+    canias_db_password: str = ""
+    canias_db_trust_cert: str = "yes"
+    canias_db_encrypt: str = "no"
+
+    # --- CANIAS mantik sabitleri ---
     canias_client: str = "00"
-    canias_company: str = "01"
-    canias_language: str = "T"
+    canias_langu: str = "T"
+    canias_default_company: str = "01"
+    canias_default_plant: str = "01"
+    canias_sendika: int = 0
 
+    # --- Uygulama ---
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     debug: bool = False
 
+    # main dalindaki alan adlariyla uyumluluk
     @property
-    def database_url(self) -> str:
-        if self.db_driver == "oracle":
-            return (
-                f"oracle+oracledb://{self.db_user}:{self.db_password}"
-                f"@{self.db_host}:{self.db_port}/?service_name={self.db_name}"
-            )
+    def canias_company(self) -> str:
+        return self.canias_default_company
+
+    @property
+    def canias_language(self) -> str:
+        return self.canias_langu
+
+    def odbc_connection_string(self) -> str:
+        """pyodbc icin ODBC baglanti dizesini olusturur."""
         return (
-            f"mssql+pyodbc://{self.db_user}:{self.db_password}"
-            f"@{self.db_host},{self.db_port}/{self.db_name}"
-            "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+            f"DRIVER={{{self.canias_db_driver}}};"
+            f"SERVER={self.canias_db_server};"
+            f"DATABASE={self.canias_db_name};"
+            f"UID={self.canias_db_user};"
+            f"PWD={self.canias_db_password};"
+            f"TrustServerCertificate={self.canias_db_trust_cert};"
+            f"Encrypt={self.canias_db_encrypt};"
         )
 
 
