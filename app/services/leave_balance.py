@@ -24,6 +24,7 @@ class LeaveBalanceService:
             connection,
             client=settings.canias_client,
             langu=settings.canias_langu,
+            db_schema=settings.canias_db_schema,
         )
         self.calculator = LeaveCalculator(
             self.provider,

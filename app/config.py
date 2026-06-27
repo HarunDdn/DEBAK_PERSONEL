@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     canias_db_driver: str = "ODBC Driver 18 for SQL Server"
     canias_db_server: str = r"DEBAKNETSIS\DB20"
     canias_db_name: str = "DEBAK803"
+    canias_db_schema: str | None = None
     canias_db_user: str = "sa"
     canias_db_password: str = "mtr+-60891011"
     canias_db_trust_cert: str = "yes"
