@@ -1,32 +1,33 @@
 """HCMT34 personel izin listesi servisi."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
+from app.canias_leave_days import LeaveDayCalculator, current_month_period
 from app.config import Settings
 from app.constants import CONFIRMSTAT_LABELS, LVSTAT_LABELS
-from app.providers import SqlLeaveDataProvider
+from app.providers import SqlLeaveDataProvider, _format_date_x, _format_time_value
 from app.schemas import PersonnelLeaveItem, PersonnelLeaveResponse
 
 
 class PersonnelLeaveService:
     """CANIAS HCMT34D502 / HCMLEAVEREC.GETPERSLEAVES mantigini sunar."""
 
-    def __init__(self, connection, settings: Settings):
+    def __init__(self, connection, settings: Settings, as_of: date | None = None):
         self.settings = settings
+        self.as_of = as_of or date.today()
         self.provider = SqlLeaveDataProvider(
             connection,
             client=settings.canias_client,
             langu=settings.canias_langu,
             db_schema=settings.canias_db_schema,
         )
+        self.calculator = LeaveDayCalculator(self.provider)
 
     def get_personnel_leaves(
         self,
         persid: str,
         *,
-        period_start: date | None = None,
-        period_end: date | None = None,
         leavecode: str | None = None,
     ) -> PersonnelLeaveResponse:
         persid = persid.strip()
@@ -36,50 +37,54 @@ class PersonnelLeaveService:
 
         company = master.company or self.settings.canias_default_company
         plant = master.plant or self.settings.canias_default_plant
+        period_start, period_end = current_month_period(self.as_of)
 
-        start = period_start or date(date.today().year, date.today().month, 1)
-        end = period_end or _last_day_of_month(start)
-
-        rows = self.provider.get_personnel_leaves(
+        raw_rows = self.provider.get_raw_personnel_leaves(
             persid,
             company,
             plant,
-            start,
-            end,
+            period_start,
+            period_end,
             leavecode=leavecode.strip() if leavecode else None,
         )
 
-        items = [
-            PersonnelLeaveItem(
-                leavenum=r.leavenum,
-                LEAVECODE=r.leavecode_text,
-                leavecode=r.leavecode,
-                CONFIRMSTAT=CONFIRMSTAT_LABELS.get(r.confirmstat, str(r.confirmstat)),
-                confirmstat=r.confirmstat,
-                LVSTAT=LVSTAT_LABELS.get(r.lvstat, str(r.lvstat)),
-                lvstat=r.lvstat,
-                FIRSTDATEX=r.firstdatex,
-                FIRSTTIME=r.firsttime,
-                LASTDATEX=r.lastdatex,
-                LASTTIME=r.lasttime,
-                TOTLEAVEDAY=r.totleaveday,
+        items: list[PersonnelLeaveItem] = []
+        for raw in raw_rows:
+            totleaveday = self.calculator.calc_totleaveday(
+                raw,
+                persid=persid,
+                period_start=period_start,
+                period_end=period_end,
+                calendar=master.calendar,
             )
-            for r in rows
-        ]
+            clipped_first = max(raw.firstdate, period_start)
+            clipped_last = min(raw.lastdate, period_end)
+            items.append(
+                PersonnelLeaveItem(
+                    leavenum=raw.leavenum,
+                    LEAVECODE=raw.leavecode_text,
+                    leavecode=raw.leavecode,
+                    CONFIRMSTAT=CONFIRMSTAT_LABELS.get(
+                        raw.confirmstat, str(raw.confirmstat)
+                    ),
+                    confirmstat=raw.confirmstat,
+                    LVSTAT=LVSTAT_LABELS.get(raw.lvstat, str(raw.lvstat)),
+                    lvstat=raw.lvstat,
+                    FIRSTDATEX=_format_date_x(clipped_first),
+                    FIRSTTIME=_format_time_value(raw.firsttime),
+                    LASTDATEX=_format_date_x(clipped_last),
+                    LASTTIME=_format_time_value(raw.lasttime),
+                    TOTLEAVEDAY=totleaveday,
+                )
+            )
 
         return PersonnelLeaveResponse(
             persid=persid,
             display_name=master.display or None,
             company=company,
             plant=plant,
-            period_start=start,
-            period_end=end,
+            period_start=period_start,
+            period_end=period_end,
             items=items,
             total_leave_days=round(sum(i.TOTLEAVEDAY for i in items), 2),
         )
-
-
-def _last_day_of_month(value: date) -> date:
-    if value.month == 12:
-        return date(value.year, 12, 31)
-    return date(value.year, value.month + 1, 1) - timedelta(days=1)

@@ -97,14 +97,6 @@
                     <input type="text" id="persid" placeholder="örn: 1028" autofocus>
                 </div>
                 <div>
-                    <label for="period_start">Dönem Başlangıç</label>
-                    <input type="date" id="period_start">
-                </div>
-                <div>
-                    <label for="period_end">Dönem Bitiş</label>
-                    <input type="date" id="period_end">
-                </div>
-                <div>
                     <label for="leavecode">İzin Kodu (opsiyonel)</label>
                     <input type="text" id="leavecode" placeholder="örn: 0005">
                 </div>
@@ -113,6 +105,7 @@
                     <button id="searchBtn" onclick="fetchLeaves()">Listele</button>
                 </div>
             </div>
+            <p id="periodInfo" class="subtitle" style="margin-top:0.75rem;margin-bottom:0;"></p>
         </div>
 
         <div id="loading" class="card loading hidden">Sorgulanıyor...</div>
@@ -143,14 +136,9 @@
     </div>
 
     <script>
-        function setDefaultPeriod() {
-            const now = new Date();
-            const start = new Date(now.getFullYear(), now.getMonth(), 1);
-            const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-            document.getElementById("period_start").value = start.toISOString().slice(0, 10);
-            document.getElementById("period_end").value = end.toISOString().slice(0, 10);
+        function formatPeriodLabel(start, end) {
+            return `Dönem: ${start} — ${end} (içinde bulunulan ay)`;
         }
-        setDefaultPeriod();
 
         document.getElementById("persid").addEventListener("keydown", (e) => {
             if (e.key === "Enter") fetchLeaves();
@@ -160,13 +148,8 @@
             const persid = document.getElementById("persid").value.trim();
             if (!persid) return;
 
-            const periodStart = document.getElementById("period_start").value;
-            const periodEnd = document.getElementById("period_end").value;
             const leavecode = document.getElementById("leavecode").value.trim();
-
             const params = new URLSearchParams();
-            if (periodStart) params.set("period_start", periodStart);
-            if (periodEnd) params.set("period_end", periodEnd);
             if (leavecode) params.set("leavecode", leavecode);
 
             const loading = document.getElementById("loading");
@@ -186,11 +169,14 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || "Sorgu başarısız");
 
+                document.getElementById("periodInfo").textContent = formatPeriodLabel(
+                    data.period_start, data.period_end
+                );
+
                 document.getElementById("personInfo").innerHTML = `
                     <div><span>Personel No</span>${data.persid}</div>
                     <div><span>Ad Soyad</span>${data.display_name || "-"}</div>
                     <div><span>Şirket / Tesis</span>${data.company || "-"} / ${data.plant || "-"}</div>
-                    <div><span>Dönem</span>${data.period_start} — ${data.period_end}</div>
                     <div><span>Toplam Gün</span><strong>${data.total_leave_days}</strong></div>
                 `;
 

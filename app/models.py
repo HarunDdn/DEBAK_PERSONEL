@@ -6,7 +6,7 @@ isimlerle birebir eslesir.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, time
 from typing import Optional
 
 
@@ -20,6 +20,72 @@ class PersonnelMaster:
     plant: str
     birthday: Optional[date]
     display: str = ""
+    calendar: str = "01"
+
+
+@dataclass
+class LeaveTypeSettings:
+    """IASHCM306 izin tipi gun kurallari (HCMT34 CALCDAYTIME)."""
+
+    leavecode: str
+    maxday: float = 0.0
+    is_monday: bool = True
+    is_tuesday: bool = True
+    is_wednesday: bool = True
+    is_thursday: bool = True
+    is_friday: bool = True
+    is_saturday: bool = False
+    is_sunday: bool = False
+    is_holiday: bool = False
+    use_lvshift: bool = False
+
+
+@dataclass
+class ShiftAssignment:
+    """IASHCMSHIFT personel vardiya atamasi."""
+
+    validfrom: date
+    validuntil: date
+    shiftnum: str
+    work_hours: dict[int, float] = field(default_factory=dict)
+
+
+@dataclass
+class ShiftDefinition:
+    """IASHCM206 + IASHCM206D vardiya tanimi."""
+
+    shiftcode: str
+    firsthour: time
+    lasthour: time
+    endnextday: bool = False
+    default_workhour: float = 7.5
+
+
+@dataclass
+class HolidayPeriod:
+    """IASHOLIDAY tatil araligi."""
+
+    start: date
+    end: date
+    is_holiday: bool = True
+
+
+@dataclass
+class RawPersonnelLeave:
+    """IASHCMLEAVES ham kaydi (hesaplama oncesi)."""
+
+    leavenum: int
+    leavecode: str
+    leavecode_text: str
+    confirmstat: int
+    lvstat: int
+    company: str
+    plant: str
+    firstdate: date
+    lastdate: date
+    firsttime: Optional[time]
+    lasttime: Optional[time]
+    saveworkstyle: int = 0
 
 
 @dataclass

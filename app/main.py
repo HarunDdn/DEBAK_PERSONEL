@@ -139,25 +139,17 @@ def remaining_leaves(
 )
 async def get_personnel_leaves(
     persid: str,
-    period_start: Optional[date] = Query(
-        None, description="Donem baslangici (HCMT34 LISTVFROM / STARTDAY)"
-    ),
-    period_end: Optional[date] = Query(
-        None, description="Donem bitisi (HCMT34 LISTVUNTIL / ENDDAY)"
-    ),
     leavecode: Optional[str] = Query(None, description="Izin tipi kodu filtresi (PLVCODE)"),
+    as_of: Optional[date] = Query(
+        None, description="Dönem ayi referansi (varsayilan: bugun, icinde bulunulan ay)"
+    ),
 ) -> PersonnelLeaveResponse:
-    """HCMT34 personel izin listesi (LEAVECODE, CONFIRMSTAT, LVSTAT, ...)."""
+    """HCMT34 personel izin listesi. Dönem her zaman icinde bulunulan aydir."""
     settings = get_settings()
     try:
         with get_connection() as conn:
-            service = PersonnelLeaveService(conn, settings)
-            return service.get_personnel_leaves(
-                persid,
-                period_start=period_start,
-                period_end=period_end,
-                leavecode=leavecode,
-            )
+            service = PersonnelLeaveService(conn, settings, as_of=as_of)
+            return service.get_personnel_leaves(persid, leavecode=leavecode)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

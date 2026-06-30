@@ -9,17 +9,22 @@ Tum SQL'ler trace dosyasindaki orijinal sorgularin birebir karsiligidir.
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import List, Optional, Protocol
 
 from .models import (
     HCM213Bracket,
     HCM213Settings,
+    HolidayPeriod,
     IHBDayBracket,
     LeaveGroupRow,
     LeaveRecord,
+    LeaveTypeSettings,
     PersonnelLeaveRow,
     PersonnelMaster,
+    RawPersonnelLeave,
+    ShiftAssignment,
+    ShiftDefinition,
 )
 
 
@@ -134,7 +139,8 @@ class SqlLeaveDataProvider:
                 ORG.COMPANY,
                 ORG.PLANT,
                 CON.BIRTHDAY,
-                CON.DISPLAY
+                CON.DISPLAY,
+                CNT.CALENDAR
             FROM {t_per} PER
             INNER JOIN {t_con} CON
                 ON CON.CLIENT = PER.CLIENT
@@ -143,12 +149,15 @@ class SqlLeaveDataProvider:
             INNER JOIN {t_org} ORG
                 ON ORG.CLIENT = PER.CLIENT
                AND ORG.CONTACTNUM = PER.CONTACTNUM
+            INNER JOIN {t_cnt} CNT
+                ON CNT.CLIENT = PER.CLIENT
+               AND CNT.CONTACTNUM = PER.CONTACTNUM
             WHERE PER.CLIENT = ?
               AND PER.PERSID = ?
               AND ORG.VALIDFROM <= ?
               AND ORG.VALIDUNTIL >= ?
             ORDER BY ORG.VALIDFROM DESC
-                """.format(t_per=t_per, t_con=t_con, t_org=t_org)
+                """.format(t_per=t_per, t_con=t_con, t_org=t_org, t_cnt=self._table("IASADRBKCNTREC"))
         today = date.today()
         cur = self._conn.cursor()
         cur.execute(sql, (self.client, persid, today, today))
@@ -162,6 +171,7 @@ class SqlLeaveDataProvider:
             plant=str(row[3]).strip(),
             birthday=_as_date(row[4]),
             display=str(row[5] or "").strip(),
+            calendar=str(row[6] or "01").strip() or "01",
         )
 
     # ------------------------------------------------------------------
@@ -394,7 +404,7 @@ class SqlLeaveDataProvider:
     # ------------------------------------------------------------------
     # HCMT34 — personel izin listesi (GETPERSLEAVES)
     # ------------------------------------------------------------------
-    def get_personnel_leaves(
+    def get_raw_personnel_leaves(
         self,
         persid: str,
         company: str,
@@ -402,16 +412,8 @@ class SqlLeaveDataProvider:
         period_start: date,
         period_end: date,
         leavecode: str | None = None,
-    ) -> List[PersonnelLeaveRow]:
-        """HCMLEAVEREC.GETPERSLEAVES.0 69-100 sorgusunun karsiligi.
-
-        Trace:
-            SELECT * FROM IASHCMLEAVES
-            WHERE CLIENT = @client AND PERSID = @persid
-              AND COMPANY = @company AND PLANT = @plant
-              AND FIRSTDATE <= @endday AND LASTDATE >= @startday
-            ORDER BY FIRSTDATE DESC, FIRSTTIME DESC, LEAVECODE
-        """
+    ) -> List[RawPersonnelLeave]:
+        """HCMLEAVEREC.GETPERSLEAVES.0 69-100 sorgusunun karsiligi."""
         t_leaves = self._table("IASHCMLEAVES")
         t_306x = self._table("IASHCM306X")
         sql = """
@@ -421,11 +423,13 @@ class SqlLeaveDataProvider:
                 ISNULL(LVX.STEXT, LV.LEAVECODE) AS LEAVECODE_TEXT,
                 LV.CONFIRMSTAT,
                 LV.LVSTAT,
+                LV.COMPANY,
+                LV.PLANT,
                 LV.FIRSTDATE,
-                LV.FIRSTTIME,
                 LV.LASTDATE,
+                LV.FIRSTTIME,
                 LV.LASTTIME,
-                LV.TOTLEAVEDAY
+                LV.SAVEWORKSTYLE
             FROM {t_leaves} LV
             LEFT JOIN {t_306x} LVX
                 ON LVX.CLIENT = LV.CLIENT
@@ -455,25 +459,182 @@ class SqlLeaveDataProvider:
 
         cur = self._conn.cursor()
         cur.execute(sql, params)
-        rows: List[PersonnelLeaveRow] = []
+        rows: List[RawPersonnelLeave] = []
         for r in cur.fetchall():
-            firstdate = _as_date(r[5])
-            lastdate = _as_date(r[7])
             rows.append(
-                PersonnelLeaveRow(
+                RawPersonnelLeave(
                     leavenum=int(_as_float(r[0])),
                     leavecode=str(r[1]).strip(),
                     leavecode_text=str(r[2] or r[1]).strip(),
                     confirmstat=int(_as_float(r[3])),
                     lvstat=int(_as_float(r[4])),
-                    firstdatex=_format_date_x(firstdate),
-                    firsttime=_format_time(r[6]),
-                    lastdatex=_format_date_x(lastdate),
-                    lasttime=_format_time(r[8]),
-                    totleaveday=_as_float(r[9]),
+                    company=str(r[5]).strip(),
+                    plant=str(r[6]).strip(),
+                    firstdate=_as_date(r[7]),
+                    lastdate=_as_date(r[8]),
+                    firsttime=_as_time(r[9]),
+                    lasttime=_as_time(r[10]),
+                    saveworkstyle=int(_as_float(r[11])),
                 )
             )
         return rows
+
+    def get_leave_type_settings(
+        self, company: str, leavecode: str
+    ) -> Optional[LeaveTypeSettings]:
+        t_306 = self._table("IASHCM306")
+        sql = """
+            SELECT LEAVECODE, MAXDAY,
+                   ISMONDAY, ISTUESDAY, ISWEDNESDAY, ISTHURSDAY, ISFRIDAY,
+                   ISSATURDAY, ISSUNDAY, ISHOLIDAY, USELVSHIFT
+            FROM {t_306}
+            WHERE CLIENT = ? AND COMPANY = ? AND LEAVECODE = ?
+        """.format(t_306=t_306)
+        cur = self._conn.cursor()
+        cur.execute(sql, (self.client, company, leavecode))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return LeaveTypeSettings(
+            leavecode=str(row[0]).strip(),
+            maxday=_as_float(row[1]),
+            is_monday=_as_bool(row[2]),
+            is_tuesday=_as_bool(row[3]),
+            is_wednesday=_as_bool(row[4]),
+            is_thursday=_as_bool(row[5]),
+            is_friday=_as_bool(row[6]),
+            is_saturday=_as_bool(row[7]),
+            is_sunday=_as_bool(row[8]),
+            is_holiday=_as_bool(row[9]),
+            use_lvshift=_as_bool(row[10]),
+        )
+
+    def get_shift_assignments(self, persid: str) -> List[ShiftAssignment]:
+        t_shift = self._table("IASHCMSHIFT")
+        sql = """
+            SELECT VALIDFROM, VALIDUNTIL, SHIFTNUM,
+                   WORKHOUR1, WORKHOUR2, WORKHOUR3, WORKHOUR4,
+                   WORKHOUR5, WORKHOUR6, WORKHOUR7
+            FROM {t_shift}
+            WHERE CLIENT = ? AND PERSID = ?
+            ORDER BY VALIDFROM
+        """.format(t_shift=t_shift)
+        cur = self._conn.cursor()
+        cur.execute(sql, (self.client, persid))
+        rows: List[ShiftAssignment] = []
+        for r in cur.fetchall():
+            rows.append(
+                ShiftAssignment(
+                    validfrom=_as_date(r[0]),
+                    validuntil=_as_date(r[1]),
+                    shiftnum=str(r[2]).strip(),
+                    work_hours={
+                        day: _as_float(r[2 + day])
+                        for day in range(1, 8)
+                    },
+                )
+            )
+        return rows
+
+    def get_shift_definition(
+        self, company: str, plant: str, shiftcode: str
+    ) -> Optional[ShiftDefinition]:
+        t_206 = self._table("IASHCM206")
+        t_206d = self._table("IASHCM206D")
+        head_sql = """
+            SELECT SHIFTCODE, ENDNEXTDAY, DEFAULTWORKHOUR
+            FROM {t_206}
+            WHERE CLIENT = ? AND COMPANY = ? AND PLANT = ? AND SHIFTCODE = ?
+        """.format(t_206=t_206)
+        cur = self._conn.cursor()
+        try:
+            cur.execute(head_sql, (self.client, company, plant, shiftcode))
+        except Exception:
+            head_sql = """
+                SELECT SHIFTCODE, ENDNEXTDAY, 7.5
+                FROM {t_206}
+                WHERE CLIENT = ? AND COMPANY = ? AND PLANT = ? AND SHIFTCODE = ?
+            """.format(t_206=t_206)
+            cur.execute(head_sql, (self.client, company, plant, shiftcode))
+        head = cur.fetchone()
+        if head is None:
+            return None
+
+        det_sql = """
+            SELECT FIRSTHOUR, LASTHOUR
+            FROM {t_206d}
+            WHERE CLIENT = ? AND COMPANY = ? AND PLANT = ? AND SHIFTCODE = ?
+            ORDER BY RECORDNUM
+        """.format(t_206d=t_206d)
+        cur.execute(det_sql, (self.client, company, plant, shiftcode))
+        details = cur.fetchall()
+        if not details:
+            return None
+
+        return ShiftDefinition(
+            shiftcode=str(head[0]).strip(),
+            firsthour=_as_time(details[0][0]) or time(8, 0),
+            lasthour=_as_time(details[-1][1]) or time(17, 0),
+            endnextday=_as_bool(head[1]),
+            default_workhour=_as_float(head[2]) or 7.5,
+        )
+
+    def get_holidays(
+        self, company: str, calendar: str, year: int
+    ) -> List[HolidayPeriod]:
+        t_hol = self._table("IASHOLIDAY")
+        sql = """
+            SELECT STRDAY, ENDDAY, ISHOLIDAY
+            FROM {t_hol}
+            WHERE CLIENT = ? AND COMPANY = ? AND CALENDAR = ? AND CYEAR = ?
+        """.format(t_hol=t_hol)
+        cur = self._conn.cursor()
+        try:
+            cur.execute(sql, (self.client, company, calendar, str(year)))
+        except Exception:
+            cur.execute(
+                f"SELECT STRDAY, ENDDAY, 1 FROM {t_hol} "
+                "WHERE CLIENT = ? AND COMPANY = ? AND CALENDAR = ? AND CYEAR = ?",
+                (self.client, company, calendar, str(year)),
+            )
+        return [
+            HolidayPeriod(
+                start=_as_date(r[0]),
+                end=_as_date(r[1]),
+                is_holiday=_as_bool(r[2]) if len(r) > 2 else True,
+            )
+            for r in cur.fetchall()
+            if _as_date(r[0]) and _as_date(r[1])
+        ]
+
+    def get_personnel_leaves(
+        self,
+        persid: str,
+        company: str,
+        plant: str,
+        period_start: date,
+        period_end: date,
+        leavecode: str | None = None,
+    ) -> List[PersonnelLeaveRow]:
+        """Geriye uyumluluk: ham kayitlari dondurur (TOTLEAVEDAY hesaplanmamis)."""
+        rows = self.get_raw_personnel_leaves(
+            persid, company, plant, period_start, period_end, leavecode
+        )
+        return [
+            PersonnelLeaveRow(
+                leavenum=r.leavenum,
+                leavecode=r.leavecode,
+                leavecode_text=r.leavecode_text,
+                confirmstat=r.confirmstat,
+                lvstat=r.lvstat,
+                firstdatex=_format_date_x(r.firstdate),
+                firsttime=_format_time_value(r.firsttime),
+                lastdatex=_format_date_x(r.lastdate),
+                lasttime=_format_time_value(r.lasttime),
+                totleaveday=0.0,
+            )
+            for r in rows
+        ]
 
 
 # ----------------------------------------------------------------------
@@ -535,17 +696,34 @@ def _format_date_x(value) -> str:
     return d.strftime("%d.%m.%Y")
 
 
-def _format_time(value) -> str:
+def _format_time_value(value) -> str:
     """HCMT34 FIRSTTIME/LASTTIME alanini HH:MM olarak dondurur."""
+    parsed = _as_time(value)
+    if parsed is None:
+        return ""
+    return parsed.strftime("%H:%M")
+
+
+def _as_time(value) -> Optional[time]:
     if value is None:
-        return ""
+        return None
     if isinstance(value, datetime):
-        return value.strftime("%H:%M")
+        return value.time()
+    if isinstance(value, time):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        for fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                return datetime.strptime(text, fmt).time()
+            except ValueError:
+                continue
     if hasattr(value, "hour") and hasattr(value, "minute"):
-        return f"{value.hour:02d}:{value.minute:02d}"
-    text = str(value).strip()
-    if not text:
-        return ""
-    if len(text) >= 5 and text[2] == ":":
-        return text[:5]
-    return text
+        return time(value.hour, value.minute)
+    return None
+
+
+def _format_time(value) -> str:
+    return _format_time_value(value)
