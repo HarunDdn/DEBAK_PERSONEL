@@ -1,0 +1,102 @@
+DEBAK PERSONEL PORTAL - WINDOWS KURULUM
+========================================
+
+Hedef klasor:
+  D:\DEBAK PERSONEL PORTAL\cursor code
+
+Bu paket, cloud ortaminda hazirlanan tum Python (.py), script ve proje
+ciktilarini icerir.
+
+
+1) DOSYALARI KOPYALAMA
+----------------------
+
+Secenek A - Bu klasoru dogrudan kopyalayin:
+  Tum "cursor-code" icerigini su dizine yapistirin:
+    D:\DEBAK PERSONEL PORTAL\cursor code
+
+Secenek B - ZIP dosyasindan acin:
+  DEBAK_PERSONEL_PORTAL_cursor-code.zip dosyasini acin ve icerigi:
+    D:\DEBAK PERSONEL PORTAL\cursor code
+  altina cikartin.
+
+Ornek (Komut Istemi veya PowerShell):
+  xcopy /E /I /Y "kaynak\cursor-code\*" "D:\DEBAK PERSONEL PORTAL\cursor code\"
+
+
+2) GEREKSINIMLER
+----------------
+- Windows 10/11
+- Python 3.10 veya uzeri (PATH'te olmali)
+- Microsoft ODBC Driver 18 for SQL Server
+- CANIAS MSSQL veritabanina erisim (DEBAKNETSIS\DB20 / DBKBGYS)
+
+
+3) KURULUM
+----------
+  cd /d "D:\DEBAK PERSONEL PORTAL\cursor code"
+  install.bat
+
+install.bat:
+  - venv olusturur
+  - requirements.txt yukler
+  - .env.example -> .env kopyalar (yoksa)
+
+
+4) VERITABANI AYARI
+-------------------
+  .env dosyasini acin ve su alani doldurun:
+    CANIAS_DB_PASSWORD=...
+
+Diger varsayilanlar:
+  CANIAS_DB_SERVER=DEBAKNETSIS\DB20
+  CANIAS_DB_NAME=DBKBGYS
+  CANIAS_DB_USER=sa
+
+
+5) PORTALI BASLATMA
+-------------------
+  start_portal.bat
+
+Tarayici:
+  http://127.0.0.1:8000          - Kalan izin (HCMT101)
+  http://127.0.0.1:8000/leaves   - Izin listesi (HCMT34)
+
+
+6) API ORNEKLERI
+----------------
+  GET /api/leave-balance/1028
+  GET /api/personnel-leaves/1028
+  GET /api/personnel-leaves/1028?leavecode=0013
+
+
+7) DOSYA LISTESI
+----------------
+  run.py
+  requirements.txt
+  .env.example
+  install.bat
+  start_portal.bat
+  README.md
+
+  app/
+    main.py
+    canias_leave.py          (HCMT101 kalan izin)
+    canias_leave_days.py     (HCMT34 TOTLEAVEDAY hesabi)
+    providers.py
+    models.py, schemas.py, constants.py, config.py, db.py
+    calendar_utils.py
+    services/leave_balance.py
+    services/personnel_leaves.py
+    templates/index.html
+    templates/leaves.html
+
+  scripts/
+    smoke_test.py
+
+  tests/
+    test_leave_days.py
+    test_calculator.py
+    test_calendar_utils.py
+    test_excluded_sen.py
+    fakes.py
