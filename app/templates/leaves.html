@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CANIAS Personel İzin Listesi</title>
+    <style>
+        :root {
+            --bg: #f4f6f9;
+            --card: #ffffff;
+            --primary: #1a56db;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #7c3aed;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+        .subtitle { color: var(--muted); margin-bottom: 1rem; font-size: 0.95rem; }
+        .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+        .nav a { color: var(--primary); text-decoration: none; font-size: 0.9rem; }
+        .nav a.active { font-weight: 600; text-decoration: underline; }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 1rem;
+        }
+        .search-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+            align-items: end;
+        }
+        label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+        input[type="text"], input[type="date"] {
+            width: 100%;
+            padding: 0.65rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.65rem 1.25rem;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .person-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .person-info span { color: var(--muted); display: block; font-size: 0.8rem; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 800px; }
+        th, td { padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        th { font-size: 0.75rem; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+        .days { font-weight: 600; color: var(--accent); }
+        .total-row td { font-weight: 600; background: #faf5ff; }
+        .error { color: #dc2626; padding: 0.75rem; background: #fef2f2; border-radius: 8px; }
+        .hidden { display: none; }
+        .loading { color: var(--muted); text-align: center; padding: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="/">İzin Bakiyesi (HCMT101)</a>
+            <a href="/leaves" class="active">İzin Listesi (HCMT34)</a>
+        </nav>
+
+        <h1>Personel İzin Listesi</h1>
+        <p class="subtitle">CANIAS ERP HCMT34 — IASHCMLEAVES</p>
+
+        <div class="card">
+            <div class="search-grid">
+                <div>
+                    <label for="persid">Personel No</label>
+                    <input type="text" id="persid" placeholder="örn: 1028" autofocus>
+                </div>
+                <div>
+                    <label for="period_start">Dönem Başlangıç</label>
+                    <input type="date" id="period_start">
+                </div>
+                <div>
+                    <label for="period_end">Dönem Bitiş</label>
+                    <input type="date" id="period_end">
+                </div>
+                <div>
+                    <label for="leavecode">İzin Kodu (opsiyonel)</label>
+                    <input type="text" id="leavecode" placeholder="örn: 0005">
+                </div>
+                <div>
+                    <label>&nbsp;</label>
+                    <button id="searchBtn" onclick="fetchLeaves()">Listele</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="card loading hidden">Sorgulanıyor...</div>
+        <div id="error" class="card error hidden"></div>
+
+        <div id="results" class="hidden">
+            <div class="card">
+                <div class="person-info" id="personInfo"></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>İzin Tipi</th>
+                                <th>Onay Durumu</th>
+                                <th>İzin Durumu</th>
+                                <th>Başlangıç</th>
+                                <th>Başlangıç Saati</th>
+                                <th>Bitiş</th>
+                                <th>Bitiş Saati</th>
+                                <th>Kullanılan Gün</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaveTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function setDefaultPeriod() {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            document.getElementById("period_start").value = start.toISOString().slice(0, 10);
+            document.getElementById("period_end").value = end.toISOString().slice(0, 10);
+        }
+        setDefaultPeriod();
+
+        document.getElementById("persid").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") fetchLeaves();
+        });
+
+        async function fetchLeaves() {
+            const persid = document.getElementById("persid").value.trim();
+            if (!persid) return;
+
+            const periodStart = document.getElementById("period_start").value;
+            const periodEnd = document.getElementById("period_end").value;
+            const leavecode = document.getElementById("leavecode").value.trim();
+
+            const params = new URLSearchParams();
+            if (periodStart) params.set("period_start", periodStart);
+            if (periodEnd) params.set("period_end", periodEnd);
+            if (leavecode) params.set("leavecode", leavecode);
+
+            const loading = document.getElementById("loading");
+            const error = document.getElementById("error");
+            const results = document.getElementById("results");
+            const btn = document.getElementById("searchBtn");
+
+            loading.classList.remove("hidden");
+            error.classList.add("hidden");
+            results.classList.add("hidden");
+            btn.disabled = true;
+
+            try {
+                const qs = params.toString();
+                const url = `/api/personnel-leaves/${encodeURIComponent(persid)}${qs ? "?" + qs : ""}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Sorgu başarısız");
+
+                document.getElementById("personInfo").innerHTML = `
+                    <div><span>Personel No</span>${data.persid}</div>
+                    <div><span>Ad Soyad</span>${data.display_name || "-"}</div>
+                    <div><span>Şirket / Tesis</span>${data.company || "-"} / ${data.plant || "-"}</div>
+                    <div><span>Dönem</span>${data.period_start} — ${data.period_end}</div>
+                    <div><span>Toplam Gün</span><strong>${data.total_leave_days}</strong></div>
+                `;
+
+                const rows = data.items.map(item => `
+                    <tr>
+                        <td>${item.LEAVECODE}</td>
+                        <td>${item.CONFIRMSTAT}</td>
+                        <td>${item.LVSTAT}</td>
+                        <td>${item.FIRSTDATEX}</td>
+                        <td>${item.FIRSTTIME}</td>
+                        <td>${item.LASTDATEX}</td>
+                        <td>${item.LASTTIME}</td>
+                        <td class="days">${item.TOTLEAVEDAY}</td>
+                    </tr>
+                `).join("");
+
+                const totalRow = data.items.length
+                    ? `<tr class="total-row"><td colspan="7">Toplam</td><td class="days">${data.total_leave_days}</td></tr>`
+                    : `<tr><td colspan="8" style="text-align:center;color:#6b7280;">Bu dönemde izin kaydı bulunamadı.</td></tr>`;
+
+                document.getElementById("leaveTable").innerHTML = rows + totalRow;
+                results.classList.remove("hidden");
+            } catch (err) {
+                error.textContent = err.message;
+                error.classList.remove("hidden");
+            } finally {
+                loading.classList.add("hidden");
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

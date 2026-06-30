@@ -87,6 +87,22 @@ class IHBDayBracket:
 
 
 @dataclass
+class PersonnelLeaveRow:
+    """HCMT34 / IASHCMLEAVES izin listesi satiri."""
+
+    leavenum: int
+    leavecode: str
+    leavecode_text: str
+    confirmstat: int
+    lvstat: int
+    firstdatex: str
+    firsttime: str
+    lastdatex: str
+    lasttime: str
+    totleaveday: float
+
+
+@dataclass
 class RemainingLeave:
     """Hesaplama cikti satiri."""
 

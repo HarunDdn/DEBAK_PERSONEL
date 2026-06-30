@@ -18,6 +18,7 @@ from .models import (
     IHBDayBracket,
     LeaveGroupRow,
     LeaveRecord,
+    PersonnelLeaveRow,
     PersonnelMaster,
 )
 
@@ -42,6 +43,17 @@ class LeaveDataProvider(Protocol):
     def has_excsenlv_param(self, company: str, lvdate: date) -> bool: ...
 
     def get_ihbday_brackets(self, company: str) -> List[IHBDayBracket]: ...
+
+
+    def get_personnel_leaves(
+        self,
+        persid: str,
+        company: str,
+        plant: str,
+        period_start: date,
+        period_end: date,
+        leavecode: str | None = None,
+    ) -> List[PersonnelLeaveRow]: ...
 
 
 class SqlLeaveDataProvider:
@@ -379,6 +391,90 @@ class SqlLeaveDataProvider:
             for r in cur.fetchall()
         ]
 
+    # ------------------------------------------------------------------
+    # HCMT34 — personel izin listesi (GETPERSLEAVES)
+    # ------------------------------------------------------------------
+    def get_personnel_leaves(
+        self,
+        persid: str,
+        company: str,
+        plant: str,
+        period_start: date,
+        period_end: date,
+        leavecode: str | None = None,
+    ) -> List[PersonnelLeaveRow]:
+        """HCMLEAVEREC.GETPERSLEAVES.0 69-100 sorgusunun karsiligi.
+
+        Trace:
+            SELECT * FROM IASHCMLEAVES
+            WHERE CLIENT = @client AND PERSID = @persid
+              AND COMPANY = @company AND PLANT = @plant
+              AND FIRSTDATE <= @endday AND LASTDATE >= @startday
+            ORDER BY FIRSTDATE DESC, FIRSTTIME DESC, LEAVECODE
+        """
+        t_leaves = self._table("IASHCMLEAVES")
+        t_306x = self._table("IASHCM306X")
+        sql = """
+            SELECT
+                LV.LEAVENUM,
+                LV.LEAVECODE,
+                ISNULL(LVX.STEXT, LV.LEAVECODE) AS LEAVECODE_TEXT,
+                LV.CONFIRMSTAT,
+                LV.LVSTAT,
+                LV.FIRSTDATE,
+                LV.FIRSTTIME,
+                LV.LASTDATE,
+                LV.LASTTIME,
+                LV.TOTLEAVEDAY
+            FROM {t_leaves} LV
+            LEFT JOIN {t_306x} LVX
+                ON LVX.CLIENT = LV.CLIENT
+               AND LVX.COMPANY = LV.COMPANY
+               AND LVX.LEAVECODE = LV.LEAVECODE
+               AND LVX.LANGU = ?
+            WHERE LV.CLIENT = ?
+              AND LV.PERSID = ?
+              AND LV.COMPANY = ?
+              AND LV.PLANT = ?
+              AND LV.FIRSTDATE <= ?
+              AND LV.LASTDATE >= ?
+        """.format(t_leaves=t_leaves, t_306x=t_306x)
+        params: list = [
+            self.langu,
+            self.client,
+            persid,
+            company,
+            plant,
+            period_end,
+            period_start,
+        ]
+        if leavecode:
+            sql += " AND LV.LEAVECODE = ?"
+            params.append(leavecode)
+        sql += " ORDER BY LV.FIRSTDATE DESC, LV.FIRSTTIME DESC, LV.LEAVECODE"
+
+        cur = self._conn.cursor()
+        cur.execute(sql, params)
+        rows: List[PersonnelLeaveRow] = []
+        for r in cur.fetchall():
+            firstdate = _as_date(r[5])
+            lastdate = _as_date(r[7])
+            rows.append(
+                PersonnelLeaveRow(
+                    leavenum=int(_as_float(r[0])),
+                    leavecode=str(r[1]).strip(),
+                    leavecode_text=str(r[2] or r[1]).strip(),
+                    confirmstat=int(_as_float(r[3])),
+                    lvstat=int(_as_float(r[4])),
+                    firstdatex=_format_date_x(firstdate),
+                    firsttime=_format_time(r[6]),
+                    lastdatex=_format_date_x(lastdate),
+                    lasttime=_format_time(r[8]),
+                    totleaveday=_as_float(r[9]),
+                )
+            )
+        return rows
+
 
 # ----------------------------------------------------------------------
 # Yardimci tip donusturucular
@@ -429,3 +525,27 @@ def _as_bool(value) -> bool:
     if isinstance(value, str):
         return value.strip() in ("1", "True", "true", "X", "x", "Y")
     return bool(_as_float(value))
+
+
+def _format_date_x(value) -> str:
+    """HCMT34 FIRSTDATEX: tarihin ilk 10 karakteri (dd.MM.yyyy)."""
+    d = _as_date(value)
+    if d is None:
+        return ""
+    return d.strftime("%d.%m.%Y")
+
+
+def _format_time(value) -> str:
+    """HCMT34 FIRSTTIME/LASTTIME alanini HH:MM olarak dondurur."""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%H:%M")
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        return f"{value.hour:02d}:{value.minute:02d}"
+    text = str(value).strip()
+    if not text:
+        return ""
+    if len(text) >= 5 and text[2] == ":":
+        return text[:5]
+    return text

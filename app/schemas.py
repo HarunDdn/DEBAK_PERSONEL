@@ -59,3 +59,33 @@ class LeaveBalanceResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class PersonnelLeaveItem(BaseModel):
+    """HCMT34 grid satiri (CANIAS alan adlariyla)."""
+
+    leavenum: int = Field(..., description="IASHCMLEAVES.LEAVENUM")
+    LEAVECODE: str = Field(..., description="Izin tipi metni (IASHCM306X.STEXT)")
+    leavecode: str = Field(..., description="Izin tipi kodu (IASHCMLEAVES.LEAVECODE)")
+    CONFIRMSTAT: str = Field(..., description="Onay durumu metni")
+    confirmstat: int = Field(..., description="Onay durumu kodu")
+    LVSTAT: str = Field(..., description="Izin durumu metni")
+    lvstat: int = Field(..., description="Izin durumu kodu")
+    FIRSTDATEX: str = Field(..., description="Baslangic tarihi (dd.MM.yyyy)")
+    FIRSTTIME: str = Field(..., description="Baslangic saati (HH:MM)")
+    LASTDATEX: str = Field(..., description="Bitis tarihi (dd.MM.yyyy)")
+    LASTTIME: str = Field(..., description="Bitis saati (HH:MM)")
+    TOTLEAVEDAY: float = Field(..., description="Kullanilan izin gunu")
+
+
+class PersonnelLeaveResponse(BaseModel):
+    """`/api/personnel-leaves/{persid}` yaniti."""
+
+    persid: str
+    display_name: str | None = None
+    company: str | None = None
+    plant: str | None = None
+    period_start: date
+    period_end: date
+    total_leave_days: float = Field(..., description="Donem toplam kullanilan gun")
+    items: List[PersonnelLeaveItem]

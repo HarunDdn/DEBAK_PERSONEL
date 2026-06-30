@@ -17,10 +17,12 @@ from app.providers import SqlLeaveDataProvider
 from app.schemas import (
     ErrorResponse,
     LeaveBalanceResponse,
+    PersonnelLeaveResponse,
     RemainingLeaveItem,
     RemainingLeaveResponse,
 )
 from app.services.leave_balance import LeaveBalanceService
+from app.services.personnel_leaves import PersonnelLeaveService
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -42,6 +44,11 @@ if static_dir.exists():
 @app.get("/", response_class=HTMLResponse, tags=["ui"])
 async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/leaves", response_class=HTMLResponse, tags=["ui"])
+async def leaves_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("leaves.html", {"request": request})
 
 
 @app.get("/health", tags=["system"])
@@ -122,3 +129,36 @@ def remaining_leaves(
         as_of=balance.query_date.isoformat(),
         items=items,
     )
+
+
+@app.get(
+    "/api/personnel-leaves/{persid}",
+    response_model=PersonnelLeaveResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    tags=["leaves"],
+)
+async def get_personnel_leaves(
+    persid: str,
+    period_start: Optional[date] = Query(
+        None, description="Donem baslangici (HCMT34 LISTVFROM / STARTDAY)"
+    ),
+    period_end: Optional[date] = Query(
+        None, description="Donem bitisi (HCMT34 LISTVUNTIL / ENDDAY)"
+    ),
+    leavecode: Optional[str] = Query(None, description="Izin tipi kodu filtresi (PLVCODE)"),
+) -> PersonnelLeaveResponse:
+    """HCMT34 personel izin listesi (LEAVECODE, CONFIRMSTAT, LVSTAT, ...)."""
+    settings = get_settings()
+    try:
+        with get_connection() as conn:
+            service = PersonnelLeaveService(conn, settings)
+            return service.get_personnel_leaves(
+                persid,
+                period_start=period_start,
+                period_end=period_end,
+                leavecode=leavecode,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Sorgu hatasi: {exc}") from exc

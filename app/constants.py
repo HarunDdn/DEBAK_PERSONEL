@@ -13,3 +13,17 @@ GR01_ANNUAL_LEAVE_BRACKETS: tuple[HCM213Bracket, ...] = (
     HCM213Bracket(ordnum=2, firstyear=6, lastyear=14, lvdays=20.0),
     HCM213Bracket(ordnum=3, firstyear=15, lastyear=99, lvdays=26.0),
 )
+
+# HCMT34D502.SETOTHERCOLUMNS — grid SETCOLPICTURE eslemeleri
+CONFIRMSTAT_LABELS: dict[int, str] = {
+    0: "Bekliyor",
+    1: "Onaylandı",
+    2: "Reddedildi",
+    3: "İptal edildi",
+}
+
+LVSTAT_LABELS: dict[int, str] = {
+    0: "Planlandı",
+    1: "Kullanıldı",
+    2: "İptal Edildi",
+}
